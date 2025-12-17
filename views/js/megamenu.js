@@ -510,3 +510,109 @@ $(document).ready(function(){
         $(this).parents('.mm_menus_li').removeClass('menu_hover');
     });
 });
+(function(){
+    if (window.etsMegaMenuRelocatorInitialized) {
+        return;
+    }
+    window.etsMegaMenuRelocatorInitialized = true;
+    var ROOT_SELECTOR = '.ets_mm_megamenu[data-etsmm-root]';
+    var MOBILE_TARGET_SELECTOR = '[data-etsmm-mobile-target], #_mobile_megamenu, #_mobile_mega_menu, .mobile-bottom-nav__item';
+    var DESKTOP_TARGET_SELECTOR = '[data-etsmm-desktop-target], #_desktop_megamenu, #_desktop_mega_menu';
+    var MOBILE_BREAKPOINT = 767;
+    var mediaQuery = window.matchMedia('(max-width: ' + MOBILE_BREAKPOINT + 'px)');
+
+    function matchesSelector(el, selector) {
+        if (!el) {
+            return false;
+        }
+        var matcher = el.matches || el.msMatchesSelector || el.webkitMatchesSelector;
+        return !!(matcher && matcher.call(el, selector));
+    }
+    function closestElement(el, selector) {
+        if (!el) {
+            return null;
+        }
+        if (typeof el.closest === 'function') {
+            return el.closest(selector);
+        }
+        var node = el;
+        while (node) {
+            if (matchesSelector(node, selector)) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return null;
+    }
+    function removeDuplicateMenus(menus, keep) {
+        for (var i = 0; i < menus.length; i++) {
+            if (menus[i] !== keep && menus[i].parentNode) {
+                menus[i].parentNode.removeChild(menus[i]);
+            }
+        }
+    }
+    function getTarget(selector, fallback) {
+        var target = document.querySelector(selector);
+        if (!target && matchesSelector(fallback, selector)) {
+            target = fallback;
+        }
+        return target;
+    }
+    function initRelocation() {
+        var menus = document.querySelectorAll(ROOT_SELECTOR);
+        if (!menus.length) {
+            return;
+        }
+        var menu = menus[0];
+        removeDuplicateMenus(menus, menu);
+        if (!menu.parentNode) {
+            return;
+        }
+        var desktopPlaceholder = document.createComment('ets-mm-desktop-slot');
+        menu.parentNode.insertBefore(desktopPlaceholder, menu);
+        var initialContainer = desktopPlaceholder.parentNode;
+        var mobileTarget = closestElement(menu, MOBILE_TARGET_SELECTOR) || getTarget(MOBILE_TARGET_SELECTOR);
+        var desktopTarget = getTarget(DESKTOP_TARGET_SELECTOR, initialContainer) || initialContainer;
+
+        function moveMenuTo(target) {
+            if (!target || menu.parentNode === target) {
+                return;
+            }
+            target.appendChild(menu);
+        }
+        function placeDesktop() {
+            if (desktopPlaceholder.parentNode) {
+                desktopPlaceholder.parentNode.insertBefore(menu, desktopPlaceholder);
+            } else {
+                moveMenuTo(desktopTarget);
+            }
+        }
+        function placeMobile() {
+            if (mobileTarget) {
+                moveMenuTo(mobileTarget);
+            } else {
+                console.warn('[ETS Megamenu] Mobile target container was not found. Keeping the menu in its desktop position.');
+                placeDesktop();
+            }
+        }
+        function handleViewportChange(e) {
+            var isMobile = (e && typeof e.matches !== 'undefined') ? e.matches : mediaQuery.matches;
+            if (isMobile) {
+                placeMobile();
+            } else {
+                placeDesktop();
+            }
+        }
+        handleViewportChange();
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', handleViewportChange);
+        } else if (typeof mediaQuery.addListener === 'function') {
+            mediaQuery.addListener(handleViewportChange);
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initRelocation);
+    } else {
+        initRelocation();
+    }
+})();
